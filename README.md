@@ -5,9 +5,7 @@ Repositorio oficial del Laboratorio 1 de Sistemas Operativos.
 
 Este proyecto fue desarrollado en lenguaje C utilizando GCC y Makefile.
 
-==================================================
 REQUISITOS
-==================================================
 
 Antes de comenzar, debe tener instalado:
 
@@ -23,9 +21,7 @@ Abrir una terminal y ejecutar:
 sudo apt update
 sudo apt install build-essential git
 
-==================================================
 TUTORIAL DE CLONACION DEL REPOSITORIO
-==================================================
 
 1. Abrir una terminal
 
