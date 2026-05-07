@@ -183,8 +183,8 @@ int *hough_votar(unsigned char *imagen_preprocesada, int ancho, int alto, int ra
 // Entradas: acumulador_hough (plano acumulador con votos de Hough), ancho y alto de la imagen en pixeles,
 //           umbral (minimo de votos para validar un centro), reportes_finales (nombre del archivo .csv de salida)
 // Salidas: ninguna, genera el archivo .csv con las coordenadas detectadas
-// Descripcion: Recorre el plano acumulador y escribe en el archivo CSV las coordenadas (X,Y) de todos los centros
-//              cuyo numero de votos supere o iguale el umbral de confianza dado, siguiendo el formato que exige el enunciado
+// Descripcion: Recorre el plano acumulador, agrupa coordenadas cercanas que superan el umbral y escribe
+//              en el archivo CSV un solo centro representativo por cada grupo detectado
 void exportar_reporte(int *acumulador_hough, int ancho, int alto, int umbral, const char *reportes_finales) {
 
     //Primero abrimos el archivo.csv para pode hacer su escritura
@@ -197,21 +197,80 @@ void exportar_reporte(int *acumulador_hough, int ancho, int alto, int umbral, co
     //Escribimos la cabecera que exige el enunciado
     fprintf(archivo_salida, "X,Y\n");
 
-    // 3. Recorrer el acumulador
+    unsigned char *visitado = (unsigned char *)calloc(ancho * alto, sizeof(unsigned char));
+    int *cola = (int *)calloc(ancho * alto, sizeof(int));
+    if (visitado == NULL || cola == NULL) {
+        printf("Error al reservar memoria para agrupar centros.\n");
+        free(visitado);
+        free(cola);
+        fclose(archivo_salida);
+        return;
+    }
+
+    const int radio_agrupacion = 12;
+    const int minimo_puntos_grupo = 50;
+
+    // 3. Recorrer el acumulador agrupando zonas cercanas que superan el umbral
     for (int y = 0; y < alto; y++) {
         for (int x = 0; x < ancho; x++) {
 
             // Calculamos el indice lineal a partir de las coordenadas 2D para acceder al arreglo plano del acumulador
             int indice = y * ancho + x;
 
-            // Si los votos en esa coordenada superan o igualan el umbral
-            if (acumulador_hough[indice] >= umbral) {
+            // Si esta celda ya pertenece a un grupo o no supera el umbral, no es un nuevo centro candidato
+            if (visitado[indice] == 1 || acumulador_hough[indice] < umbral) {
+                continue;
+            }
 
-                // Escribir la coordenada en formato "x,y" seguido de un salto de línea
-                fprintf(archivo_salida, "%d,%d\n", x, y);
+            int inicio = 0;
+            int fin = 0;
+            int mejor_indice = indice;
+            int mejores_votos = acumulador_hough[indice];
+            int puntos_grupo = 0;
+
+            cola[fin++] = indice;
+            visitado[indice] = 1;
+
+            while (inicio < fin) {
+                int actual = cola[inicio++];
+                int actual_x = actual % ancho;
+                int actual_y = actual / ancho;
+                puntos_grupo++;
+
+                if (acumulador_hough[actual] > mejores_votos) {
+                    mejores_votos = acumulador_hough[actual];
+                    mejor_indice = actual;
+                }
+
+                // Unir candidatos cercanos para no reportar muchos puntos alrededor del mismo centro
+                for (int dy = -radio_agrupacion; dy <= radio_agrupacion; dy++) {
+                    for (int dx = -radio_agrupacion; dx <= radio_agrupacion; dx++) {
+                        int vecino_x = actual_x + dx;
+                        int vecino_y = actual_y + dy;
+
+                        if (vecino_x < 0 || vecino_x >= ancho || vecino_y < 0 || vecino_y >= alto) {
+                            continue;
+                        }
+
+                        int vecino = vecino_y * ancho + vecino_x;
+                        if (visitado[vecino] == 0 && acumulador_hough[vecino] >= umbral) {
+                            visitado[vecino] = 1;
+                            cola[fin++] = vecino;
+                        }
+                    }
+                }
+            }
+
+            if (puntos_grupo >= minimo_puntos_grupo) {
+                int centro_x = mejor_indice % ancho;
+                int centro_y = mejor_indice / ancho;
+                fprintf(archivo_salida, "%d,%d\n", centro_x, centro_y);
             }
         }
     }
+
+    free(visitado);
+    free(cola);
 
     // Cerramos el archivo
     fclose(archivo_salida);
